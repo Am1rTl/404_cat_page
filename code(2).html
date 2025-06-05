@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Страница не найдена</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #fff0f5 0%, #ffffff 70%, #ffe4e1 100%); /* Светло-розовый и белый фон */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Arial', sans-serif;
+            color: #555;
+            text-align: center;
+        }
+        #animationCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0; /* Холст под контентом */
+        }
+        .content {
+            position: relative; /* Чтобы был над холстом */
+            z-index: 1;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.75); /* Полупрозрачный фон для читаемости */
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 3em; /* Увеличил для заметности */
+            color: #ff69b4; /* Розовый акцент */
+            margin-bottom: 0.2em;
+        }
+        p {
+            font-size: 1.2em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="animationCanvas"></canvas>
+    <div class="content">
+        <h1>404</h1>
+        <p>Ой! Кажется, эта страница потерялась в зарослях сакуры...</p>
+        <p>Но не волнуйтесь, наш любопытный кот уже ищет её (или просто гоняется за лепестком).</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('animationCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            cat.idleWalk.centerX = canvas.width / 2;
+            cat.idleWalk.centerY = canvas.height / 2;
+            cat.idleWalk.radius = Math.min(canvas.width, canvas.height) * 0.3;
+        });
+
+        let mouse = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            moved: false
+        };
+
+        canvas.addEventListener('mousemove', (event) => {
+            mouse.x = event.clientX;
+            mouse.y = event.clientY;
+            if (!mouse.moved) { 
+                 if (cat.state === 'idle_walking' || cat.state === 'idle_looking' || cat.state === 'playing_petals') {
+                    cat.state = 'hunting';
+                    cat.expression = 'excited';
+                }
+            }
+            mouse.moved = true;
+            cat.idleTimer = 0;
+        });
+        canvas.addEventListener('mouseleave', () => {
+            // Можно было бы установить mouse.moved = false здесь, 
+            // но таймер cat.idleTimer справится и без этого.
+        });
+
+
+        // --- КОТ ---
+        let cat = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            width: 90,
+            height: 70,
+            angle: 0,
+            speed: 3, 
+            currentSpeed: 3,
+            state: 'idle_looking', 
+            expression: 'calm', 
+            idleTimer: 0,
+            lastActivityTime: Date.now(),
+            
+            targetX: mouse.x,
+            targetY: mouse.y,
+            pounce: {
+                isPouncing: false,
+                duration: 30, 
+                currentFrame: 0,
+                pawExtension: 0,
+                pounceSpeedBoost: 2 
+            },
+
+            idleWalk: {
+                centerX: canvas.width / 2,
+                centerY: canvas.height / 2,
+                radius: Math.min(canvas.width, canvas.height) * 0.3,
+                angle: 0,
+                baseSpeed: 0.015, 
+                currentSpeed: 0.015,
+                isRunMode: false, 
+                stepPhase: 0,
+            },
+            furSway: 0,
+            tailSway: 0,
+            tailSwaySpeed: 0.1,
+            tailSwayAmplitude: Math.PI / 8,
+            currentPawPrintDelay: 0,
+            pawPrintInterval: 15, 
+        };
+
+        // --- СЛЕДЫ ЛАП ---
+        let pawPrints = [];
+        const PAW_PRINT_LIFETIME = 2500; 
+        const PAW_PRINT_SIZE = 8;
+
+        function addPawPrint(x, y, angle) {
+            const pawOffsetY = cat.height * 0.4; 
+            const pawDist = cat.width * 0.15; 
+
+            pawPrints.push({
+                x: x + Math.cos(angle) * pawOffsetY - Math.sin(angle) * pawDist,
+                y: y + Math.sin(angle) * pawOffsetY + Math.cos(angle) * pawDist,
+                opacity: 1,
+                createdAt: Date.now(),
+                angle: angle
+            });
+            pawPrints.push({
+                x: x + Math.cos(angle) * pawOffsetY + Math.sin(angle) * pawDist,
+                y: y + Math.sin(angle) * pawOffsetY - Math.cos(angle) * pawDist,
+                opacity: 1,
+                createdAt: Date.now(),
+                angle: angle
+            });
+        }
+
+        function drawPawPrints() {
+            pawPrints = pawPrints.filter(p => {
+                const age = Date.now() - p.createdAt;
+                if (age > PAW_PRINT_LIFETIME) return false;
+                p.opacity = 1 - (age / PAW_PRINT_LIFETIME);
+                return true;
+            });
+
+            pawPrints.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                ctx.fillStyle = `rgba(100, 100, 100, ${p.opacity * 0.4})`;
+                
+                ctx.beginPath();
+                ctx.ellipse(0, 0, PAW_PRINT_SIZE * 0.5, PAW_PRINT_SIZE * 0.6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                for (let i = -1; i <= 1; i++) {
+                     ctx.beginPath();
+                     ctx.arc(i * PAW_PRINT_SIZE * 0.35, -PAW_PRINT_SIZE * 0.5, PAW_PRINT_SIZE * 0.2, 0, Math.PI * 2);
+                     ctx.fill();
+                }
+                ctx.beginPath(); 
+                ctx.arc(0, -PAW_PRINT_SIZE * 0.7, PAW_PRINT_SIZE * 0.18, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            });
+        }
+        
+        // --- ВЕТЕР ---
+        let wind = {
+            strength: 0,
+            directionX: -1, 
+            directionY: 0,
+            targetStrength: 0,
+            lastChangeTime: Date.now(),
+            changeInterval: 5000 + Math.random() * 5000 
+        };
+
+        function updateWind() {
+            if (Date.now() - wind.lastChangeTime > wind.changeInterval) {
+                wind.targetStrength = Math.random() * 2.5; 
+                if (Math.random() < 0.3) wind.targetStrength = 0;
+
+                wind.directionX = -0.7 - Math.random() * 0.6; 
+                wind.directionY = (Math.random() - 0.5) * 0.6; 
+                
+                wind.lastChangeTime = Date.now();
+                wind.changeInterval = 4000 + Math.random() * 6000;
+            }
+            wind.strength += (wind.targetStrength - wind.strength) * 0.03; 
+        }
+
+        // --- ЛЕПЕСТКИ САКУРЫ ---
+        let sakuraPetals = [];
+        const NUM_PETALS = 60; 
+
+        function createPetal() {
+            return {
+                x: Math.random() * canvas.width,
+                y: Math.random() * -canvas.height, 
+                size: Math.random() * 6 + 4, 
+                speedY: Math.random() * 0.8 + 0.3, 
+                speedX: (Math.random() - 0.5) * 0.5, 
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.07,
+                opacity: Math.random() * 0.4 + 0.6, 
+                type: Math.floor(Math.random() * 3),
+                sway: (Math.random() - 0.5) * 0.05, 
+                swaySpeed: Math.random() * 0.01 + 0.005
+            };
+        }
+
+        for (let i = 0; i < NUM_PETALS; i++) {
+            sakuraPetals.push(createPetal());
+        }
+
+        function drawSakuraPetal(petal) { // Отрисовка ОДНОГО лепестка
+            ctx.save();
+            ctx.translate(petal.x, petal.y);
+            ctx.rotate(petal.rotation);
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255, 182, 193, ${petal.opacity})`; 
+            
+            if (petal.type === 0) {
+                ctx.ellipse(0, 0, petal.size, petal.size / 1.8, 0, 0, Math.PI * 2);
+            } 
+            else if (petal.type === 1) {
+                ctx.moveTo(0, -petal.size / 2);
+                ctx.bezierCurveTo(petal.size / 1.5, -petal.size / 3, petal.size / 1.5, petal.size / 4, 0, petal.size / 1.8);
+                ctx.bezierCurveTo(-petal.size / 1.5, petal.size / 4, -petal.size / 1.5, -petal.size / 3, 0, -petal.size / 2);
+            }
+            else {
+                ctx.moveTo(0, -petal.size * 0.6);
+                ctx.quadraticCurveTo(petal.size * 0.7, 0, 0, petal.size * 0.6);
+                ctx.quadraticCurveTo(-petal.size * 0.7, 0, 0, -petal.size * 0.6);
+            }
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // ИСПРАВЛЕНИЕ: Добавляем функцию для отрисовки ВСЕХ лепестков
+        function drawSakuraPetals() {
+            sakuraPetals.forEach(petal => {
+                drawSakuraPetal(petal); // Вызываем функцию для каждого лепестка
+            });
+        }
+
+
+        function updateSakuraPetals() {
+            sakuraPetals.forEach(p => {
+                p.y += p.speedY;
+                // Движение по ветру: если ветра нет (wind.strength близко к 0), то p.speedX доминирует (легкое боковое качание)
+                // Если ветер есть, он добавляется к p.speedX
+                let windForceX = wind.strength * wind.directionX * (p.size / 5) ;
+                let windForceY = wind.strength * wind.directionY * (p.size / 10);
+
+                p.x += p.speedX + windForceX;
+                p.y += windForceY; // Ветер также может сносить немного по Y
+
+                p.rotation += p.rotationSpeed * (1 + wind.strength * 0.3); 
+                p.x += Math.sin(p.y * p.swaySpeed) * p.sway * p.size; 
+
+                if (cat.state === 'idle_walking' || cat.state === 'playing_petals' || cat.state === 'hunting' || cat.state === 'pouncing') {
+                    let dxCat = p.x - cat.x;
+                    let dyCat = p.y - cat.y;
+                    let distCat = Math.sqrt(dxCat * dxCat + dyCat * dyCat);
+                    let interactionRadius = (cat.width / 2 + p.size) * (cat.state === 'pouncing' ? 1.5 : 1); 
+
+                    if (distCat < interactionRadius) { 
+                        if (cat.state !== 'playing_petals' && Math.random() < 0.01 && cat.idleTimer > 1) { 
+                             cat.state = 'playing_petals';
+                             cat.expression = 'playful';
+                             cat.idleTimer = 0; 
+                        }
+                        let pushFactor = (cat.state === 'pouncing' ? 2.5 : 1.5);
+                        p.speedX += (dxCat / distCat) * pushFactor * (Math.random() * 0.5 + 0.5);
+                        p.speedY += (dyCat / distCat) * pushFactor * (Math.random() * 0.5 + 0.2); 
+                        p.rotationSpeed += (Math.random() - 0.5) * 0.15;
+                        p.opacity = Math.max(0.2, p.opacity - 0.1); 
+                    }
+                }
+                
+                if (p.y > canvas.height + p.size * 2) { 
+                    Object.assign(p, createPetal()); 
+                    p.y = -p.size * 2; 
+                }
+                if (p.x < -p.size * 5 && wind.strength > 0.1) { // Улетел влево (только если есть ветер, иначе вернется speedX)
+                     Object.assign(p, createPetal());
+                     p.x = canvas.width + p.size * 2;
+                     p.y = Math.random() * canvas.height * 0.5; 
+                } else if (p.x < -p.size * 2 && wind.strength <= 0.1) { // Если ветра нет и улетел влево из-за своего speedX
+                     Object.assign(p, createPetal());
+                     p.x = canvas.width + p.size * 2; // Возвращаем справа
+                }
+
+                if (p.x > canvas.width + p.size * 5 && wind.strength > 0.1) { // Улетел вправо (обычно не должно случаться при ветре влево)
+                     Object.assign(p, createPetal());
+                     p.x = -p.size * 2;
+                     p.y = Math.random() * canvas.height * 0.5;
+                } else if (p.x > canvas.width + p.size * 2 && wind.strength <= 0.1) { // Если ветра нет и улетел вправо
+                    Object.assign(p, createPetal());
+                    p.x = -p.size * 2; // Возвращаем слева
+                }
+            });
+        }
+
+
+        function drawCat() {
+            ctx.save();
+            ctx.translate(cat.x, cat.y);
+            ctx.rotate(cat.angle);
+
+            let windEffect = wind.strength * 0.03 * Math.sin(Date.now() * 0.01 + cat.x * 0.1); 
+            cat.furSway = windEffect * 5;
+            cat.tailSway = Math.sin(Date.now() * cat.tailSwaySpeed * (cat.currentSpeed / cat.speed + 0.5) + cat.angle) * cat.tailSwayAmplitude * (1 + wind.strength * 0.4);
+
+            ctx.beginPath();
+            ctx.ellipse(0, cat.height * 0.48, cat.width * 0.38, cat.height * 0.12, 0, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0,0,0,${0.08 + wind.strength * 0.01})`; 
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(-cat.width * 0.42, cat.height * 0.1); 
+            ctx.bezierCurveTo(
+                -cat.width * 0.75 + cat.furSway, cat.height * 0.0 + cat.tailSway * 25, 
+                -cat.width * 0.95 + cat.furSway, cat.height * 0.25 + cat.tailSway * 35,  
+                -cat.width * 1.15 + cat.furSway * 1.8, cat.height * 0.05 + cat.tailSway * 45 
+            );
+            ctx.lineWidth = 13 + cat.furSway * 0.6; 
+            ctx.strokeStyle = '#707070'; 
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.lineWidth = 9 + cat.furSway * 0.6;
+            ctx.strokeStyle = '#888888'; 
+            ctx.stroke();
+
+            let rearPawOffset = Math.sin(cat.idleWalk.stepPhase + Math.PI/2) * 5 * (cat.idleWalk.isRunMode ? 1.5 : 1);
+            for (let i = -1; i <= 1; i += 2) {
+                ctx.fillStyle = '#888888';
+                ctx.strokeStyle = '#777777';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.ellipse(-cat.width * 0.28 * i, cat.height * 0.15, cat.width * 0.15, cat.height * 0.2, 0,0, Math.PI*2);
+                ctx.fill(); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-cat.width * 0.25 * i, cat.height * 0.25);
+                ctx.quadraticCurveTo(
+                    -cat.width * 0.2 * i - rearPawOffset * i * 0.3, cat.height * 0.35,
+                    -cat.width * 0.15 * i - rearPawOffset * i, cat.height * 0.42
+                );
+                ctx.lineWidth = 10; ctx.strokeStyle = '#888888'; ctx.lineCap = 'round'; ctx.stroke(); // Исправил пропущенный strokeStyle
+                ctx.beginPath(); 
+                ctx.arc(-cat.width * 0.15 * i - rearPawOffset*i, cat.height * 0.42, 5,0,Math.PI*2);
+                ctx.fillStyle = '#777777'; ctx.fill();
+            }
+
+            ctx.beginPath();
+            ctx.ellipse(0, 0, cat.width * 0.4 + cat.furSway * 0.3, cat.height * 0.45 + cat.furSway * 0.2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#888888'; 
+            ctx.fill();
+            ctx.strokeStyle = '#777777';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            let pawOffsetWalk = 0;
+            if (cat.state === 'idle_walking' || (cat.state === 'hunting' && !cat.pounce.isPouncing)) {
+                pawOffsetWalk = Math.sin(cat.idleWalk.stepPhase) * 7 * (cat.idleWalk.isRunMode ? 1.5 : 1);
+            }
+            
+            for (let i = -1; i <= 1; i += 2) {
+                ctx.beginPath();
+                ctx.ellipse(cat.width * 0.22 * i, cat.height * 0.05, cat.width * 0.1, cat.height*0.15, 0,0,Math.PI*2);
+                ctx.fillStyle = '#888888'; ctx.fill(); ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke(); // Добавил strokeStyle и lineWidth
+
+                ctx.beginPath(); // Отдельный path для линии лапы
+                ctx.moveTo(cat.width * 0.22 * i, cat.height * 0.1); 
+                let kneeX = cat.width * 0.20 * i + (cat.pounce.isPouncing ? cat.pounce.pawExtension * i * 0.3 : pawOffsetWalk * i * 0.5);
+                let kneeY = cat.height * 0.30 + (cat.pounce.isPouncing ? cat.pounce.pawExtension * 0.05 : Math.abs(pawOffsetWalk) * 0.2);
+                let pawX = cat.width * 0.22 * i + (cat.pounce.isPouncing ? cat.pounce.pawExtension * i * 0.9 : pawOffsetWalk * i);
+                let pawY = cat.height * 0.42 + (cat.pounce.isPouncing ? cat.pounce.pawExtension * 0.2 : Math.abs(pawOffsetWalk) * 0.05);
+
+                ctx.quadraticCurveTo(kneeX, kneeY, pawX, pawY);
+                ctx.lineWidth = 11;
+                ctx.strokeStyle = '#888888';
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                ctx.beginPath(); 
+                ctx.arc(pawX, pawY, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#777777';
+                ctx.fill();
+            }
+
+            let headX = cat.width * 0.33;
+            let headY = 0;
+            ctx.beginPath();
+            ctx.arc(headX, headY, cat.height * 0.3 + cat.furSway * 0.1, 0, Math.PI * 2);
+            ctx.fillStyle = '#888888';
+            ctx.fill();
+            ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke(); // Добавил strokeStyle и lineWidth
+
+            for (let i = -1; i <= 1; i += 2) {
+                ctx.beginPath();
+                let earBaseY = -cat.height * 0.28 * i;
+                ctx.moveTo(headX + cat.furSway*0.1*i, earBaseY); 
+                ctx.lineTo(headX + cat.height * 0.15 * i + cat.furSway*0.2*i, earBaseY - cat.height * 0.12 * i); 
+                ctx.lineTo(headX + cat.height * 0.05 * i + cat.furSway*0.1*i, earBaseY + cat.height * 0.13 * i); 
+                ctx.closePath();
+                ctx.fillStyle = '#888888';
+                ctx.fill();
+                ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke(); // Добавил strokeStyle и lineWidth
+                
+                ctx.beginPath();
+                ctx.moveTo(headX + cat.height*0.03*i + cat.furSway*0.1*i, earBaseY - cat.height * 0.01 * i);
+                ctx.lineTo(headX + cat.height * 0.1 * i + cat.furSway*0.15*i, earBaseY - cat.height * 0.08 * i);
+                ctx.lineTo(headX + cat.height * 0.04 * i + cat.furSway*0.08*i, earBaseY + cat.height * 0.08 * i);
+                ctx.closePath();
+                ctx.fillStyle = '#FFB6C1'; 
+                ctx.fill();
+            }
+
+            let eyeRadius = cat.height * 0.055;
+            let eyeYOffset = cat.height * 0.1;
+            let eyeXPos = headX + cat.width * 0.07;
+
+            for (let i = -1; i <= 1; i += 2) {
+                ctx.beginPath();
+                let currentEyeRadius = eyeRadius;
+                if (cat.expression === 'excited' || cat.expression === 'playful') {
+                     ctx.ellipse(eyeXPos, headY + eyeYOffset * i, currentEyeRadius, currentEyeRadius * 0.65, 0, 0, Math.PI * 2);
+                } else if (cat.expression === 'surprised') {
+                    currentEyeRadius *= 1.25; 
+                     ctx.arc(eyeXPos, headY + eyeYOffset * i, currentEyeRadius, 0, Math.PI * 2);
+                } else { 
+                     ctx.arc(eyeXPos, headY + eyeYOffset * i, currentEyeRadius, 0, Math.PI * 2);
+                }
+                
+                let grad = ctx.createRadialGradient(
+                    eyeXPos, headY + eyeYOffset * i, currentEyeRadius * 0.1,
+                    eyeXPos, headY + eyeYOffset * i, currentEyeRadius
+                );
+                grad.addColorStop(0, '#AECB5B'); 
+                grad.addColorStop(1, '#4A5D23'); 
+
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                ctx.beginPath();
+                let pupilWidth = currentEyeRadius * 0.25;
+                let pupilHeight = currentEyeRadius * 0.7;
+                if (cat.expression === 'excited' || cat.expression === 'surprised' || cat.expression === 'playful') {
+                    pupilHeight = currentEyeRadius * 0.5; 
+                    pupilWidth = pupilHeight;
+                }
+                ctx.ellipse(eyeXPos, headY + eyeYOffset * i, pupilWidth, pupilHeight, 0, 0, Math.PI * 2);
+                ctx.fillStyle = 'black';
+                ctx.fill();
+                ctx.beginPath(); 
+                ctx.arc(eyeXPos + currentEyeRadius * 0.25, headY + eyeYOffset * i - currentEyeRadius * 0.25, currentEyeRadius * 0.2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.fill();
+            }
+
+            let noseX = headX + cat.width * 0.13;
+            let noseY = headY;
+            ctx.beginPath();
+            ctx.moveTo(noseX, noseY - cat.height * 0.025);
+            ctx.lineTo(noseX, noseY + cat.height * 0.025);
+            ctx.lineTo(noseX + cat.width*0.03, noseY);
+            ctx.closePath();
+            ctx.fillStyle = '#FFA07A'; 
+            ctx.fill();
+
+            let mouthX = noseX;
+            let mouthY = noseY + cat.height * 0.05;
+            ctx.beginPath();
+            ctx.moveTo(mouthX, mouthY);
+            if (cat.expression === 'surprised') { 
+                 ctx.arc(mouthX, mouthY + cat.height*0.02, cat.height*0.03, 0.2*Math.PI, 1.8*Math.PI);
+            } else if (cat.expression === 'playful' || cat.expression === 'excited') { 
+                ctx.quadraticCurveTo(mouthX, mouthY + cat.height * 0.05, mouthX - cat.width * 0.02, mouthY + cat.height * 0.03);
+                ctx.moveTo(mouthX, mouthY);
+                ctx.quadraticCurveTo(mouthX, mouthY + cat.height * 0.05, mouthX + cat.width * 0.02, mouthY + cat.height * 0.03);
+            } else { 
+                ctx.lineTo(mouthX - cat.width * 0.02, mouthY + cat.height * 0.03);
+                ctx.moveTo(mouthX, mouthY);
+                ctx.lineTo(mouthX + cat.width * 0.02, mouthY + cat.height * 0.03);
+            }
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function updateCat() {
+            const now = Date.now();
+            const deltaTime = (now - cat.lastActivityTime) / 1000; 
+            cat.lastActivityTime = now;
+            
+            if(mouse.moved) {
+                cat.idleTimer = 0;
+            } else {
+                cat.idleTimer += deltaTime;
+            }
+            mouse.moved = false; 
+
+            cat.currentSpeed = cat.speed;
+            if(cat.state === 'idle_walking' && cat.idleWalk.isRunMode) cat.currentSpeed *= 1.8;
+            if(cat.state === 'pouncing') cat.currentSpeed *= cat.pounce.pounceSpeedBoost;
+
+
+            if (cat.state === 'hunting') {
+                cat.targetX = mouse.x;
+                cat.targetY = mouse.y;
+                cat.expression = 'excited';
+
+                let dx = cat.targetX - cat.x;
+                let dy = cat.targetY - cat.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+                
+                let targetAngle = Math.atan2(dy, dx);
+                let angleDiff = targetAngle - cat.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                cat.angle += angleDiff * 0.2; 
+
+                if (distance > cat.width / 3) { 
+                    cat.x += Math.cos(cat.angle) * cat.currentSpeed;
+                    cat.y += Math.sin(cat.angle) * cat.currentSpeed;
+                    cat.idleWalk.stepPhase += 0.3 * (cat.currentSpeed / cat.speed); 
+                    
+                    cat.currentPawPrintDelay++;
+                    if (cat.currentPawPrintDelay >= cat.pawPrintInterval / (cat.currentSpeed / cat.speed)) { 
+                        addPawPrint(cat.x, cat.y, cat.angle);
+                        cat.currentPawPrintDelay = 0;
+                    }
+                } else if (!cat.pounce.isPouncing && distance > 5) { 
+                    cat.state = 'pouncing';
+                    cat.pounce.isPouncing = true;
+                    cat.pounce.currentFrame = 0;
+                    cat.expression = 'excited';
+                }
+                
+                if (cat.idleTimer > 3) { 
+                     cat.state = 'idle_looking';
+                     cat.expression = 'surprised';
+                 }
+
+            } else if (cat.state === 'pouncing') {
+                cat.pounce.currentFrame++;
+                if (cat.pounce.currentFrame < cat.pounce.duration / 2) {
+                    cat.pounce.pawExtension += 4; 
+                } else {
+                    cat.pounce.pawExtension -= 4; 
+                }
+                cat.pounce.pawExtension = Math.max(0, cat.pounce.pawExtension);
+                
+                let pounceProgress = cat.pounce.currentFrame / cat.pounce.duration;
+                let lungeFactor = Math.sin(pounceProgress * Math.PI) * 0.5; 
+                cat.x += Math.cos(cat.angle) * cat.currentSpeed * lungeFactor;
+                cat.y += Math.sin(cat.angle) * cat.currentSpeed * lungeFactor;
+
+
+                if (cat.pounce.currentFrame >= cat.pounce.duration) {
+                    cat.pounce.isPouncing = false;
+                    cat.pounce.pawExtension = 0;
+                    addPawPrint(cat.x, cat.y, cat.angle); 
+                    cat.state = 'hunting'; 
+                    if (cat.idleTimer > 0.5) { 
+                        cat.state = 'idle_looking';
+                        cat.expression = 'surprised';
+                    } else {
+                        cat.expression = 'excited';
+                    }
+                }
+            } else if (cat.state === 'idle_looking') {
+                cat.idleWalk.stepPhase = 0; 
+                cat.expression = 'surprised';
+                cat.angle += Math.sin(Date.now()*0.001 + cat.x * 0.01) * 0.005; // Небольшой поворот головы/тела при осмотре
+
+                if (cat.idleTimer > 5) { 
+                    cat.state = 'idle_walking';
+                    cat.expression = 'calm';
+                    cat.idleWalk.angle = Math.atan2(cat.y - cat.idleWalk.centerY, cat.x - cat.idleWalk.centerX);
+                }
+                 if (cat.idleTimer < 0.1) { 
+                    cat.state = 'hunting'; cat.expression = 'excited';
+                }
+            } else if (cat.state === 'idle_walking') {
+                cat.expression = cat.idleWalk.isRunMode ? 'excited' : 'calm';
+                cat.idleWalk.currentSpeed = cat.idleWalk.baseSpeed * (cat.idleWalk.isRunMode ? 2.5 : 1); 
+                cat.idleWalk.angle += cat.idleWalk.currentSpeed;
+                
+                let targetWalkX = cat.idleWalk.centerX + Math.cos(cat.idleWalk.angle) * cat.idleWalk.radius;
+                let targetWalkY = cat.idleWalk.centerY + Math.sin(cat.idleWalk.angle) * cat.idleWalk.radius;
+
+                let dx = targetWalkX - cat.x;
+                let dy = targetWalkY - cat.y;
+                let desiredAngle = Math.atan2(dy, dx);
+
+                let angleDiff = desiredAngle - cat.angle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                cat.angle += angleDiff * 0.1; 
+
+                let moveSpeed = cat.currentSpeed * (cat.idleWalk.isRunMode ? 0.8 : 0.5);
+                cat.x += Math.cos(cat.angle) * moveSpeed; 
+                cat.y += Math.sin(cat.angle) * moveSpeed;
+                
+                cat.idleWalk.stepPhase += 0.15 * (cat.idleWalk.isRunMode ? 2 : 1);
+
+                if (Math.random() < 0.003) { 
+                    cat.idleWalk.isRunMode = !cat.idleWalk.isRunMode;
+                }
+
+                cat.currentPawPrintDelay++;
+                if (cat.currentPawPrintDelay >= cat.pawPrintInterval / (moveSpeed / cat.speed)) {
+                    addPawPrint(cat.x, cat.y, cat.angle);
+                    cat.currentPawPrintDelay = 0;
+                }
+
+                 if (cat.idleTimer < 0.1) { 
+                    cat.state = 'hunting'; cat.expression = 'excited';
+                }
+
+            } else if (cat.state === 'playing_petals') {
+                cat.expression = 'playful';
+                cat.idleWalk.stepPhase += 0.25; 
+                cat.angle += (Math.random() - 0.5) * 0.05; 
+
+                if (Math.random() < 0.01 || cat.idleTimer > 4) { 
+                    cat.state = 'idle_walking';
+                    cat.expression = 'calm';
+                }
+                 if (cat.idleTimer < 0.1 && cat.idleTimer > 0) { 
+                    cat.state = 'hunting'; cat.expression = 'excited';
+                }
+            }
+            cat.x = Math.max(cat.width / 1.5, Math.min(cat.x, canvas.width - cat.width / 1.5));
+            cat.y = Math.max(cat.height / 1.5, Math.min(cat.y, canvas.height - cat.height / 1.5));
+        }
+
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            updateWind();
+            updateSakuraPetals(); 
+            drawSakuraPetals(); // Теперь эта функция определена и будет вызвана корректно
+
+            updateCat();
+            drawPawPrints(); 
+            drawCat();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        cat.targetX = cat.x; 
+        cat.targetY = cat.y;
+        // Случайное начальное положение кота для разнообразия
+        if (Math.random() < 0.5) {
+             cat.x = canvas.width * (0.2 + Math.random() * 0.2); // левая часть
+        } else {
+             cat.x = canvas.width * (0.6 + Math.random() * 0.2); // правая часть
+        }
+        cat.y = canvas.height * (0.3 + Math.random() * 0.4); // середина по высоте
+
+        cat.state = 'idle_looking'; 
+        cat.expression = 'calm';
+        cat.idleTimer = 3.1; 
+
+
+        gameLoop();
+    </script>
+</body>
+</html>
