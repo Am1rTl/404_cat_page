@@ -27,17 +27,28 @@
         .content {
             position: relative; /* Чтобы был над холстом */
             z-index: 1;
-            padding: 20px;
-            /* ИЗМЕНЕНИЕ: Убран задний фон и тень */
-            /* background-color: rgba(255, 255, 255, 0.75); */
-            /* box-shadow: 0 0 15px rgba(0,0,0,0.1); */
-            border-radius: 10px; /* Оставим, если пригодится для других элементов в будущем */
+            padding: 40px 60px;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(255, 105, 180, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
         }
         h1 {
-            font-size: 3em; /* Увеличил для заметности */
-            color: #ff69b4; /* Розовый акцент */
-            /* ИЗМЕНЕНИЕ: Убран нижний отступ */
-            margin-bottom: 0; 
+            font-size: 4em;
+            color: #ff69b4;
+            margin-bottom: 0.1em;
+            margin-top: 0;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5), 0 0 20px rgba(255, 105, 180, 0.3);
+        }
+
+        .content p {
+            font-size: 1.5em;
+            color: #ff69b4;
+            margin: 0;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(255, 105, 180, 0.3);
         }
         /* Параграфы были удалены из HTML, так что этот стиль больше не нужен, но оставлю его закомментированным, чтобы показать, что он относился к параграфам */
         /*
@@ -57,6 +68,7 @@
     <canvas id="animationCanvas"></canvas>
     <div class="content">
         <h1>404</h1>
+        <p>Страница не найдена</p>
     </div>
 
     <script>
@@ -288,7 +300,9 @@
                 sway: (Math.random() - 0.5) * 0.05, // Коэффициент горизонтального покачивания
                 swaySpeed: Math.random() * 0.01 + 0.005, // Скорость цикла покачивания
                 grounded: false, // Новое свойство для накапливания
-                groundedTime: 0 // Время, когда лепесток достиг земли
+                groundedTime: 0, // Время, когда лепесток достиг земли
+                flip: Math.random() * Math.PI * 2,
+                flipSpeed: (Math.random() - 0.5) * 0.1
             };
         }
 
@@ -308,8 +322,14 @@
             ctx.save();
             ctx.translate(petal.x, petal.y);
             ctx.rotate(petal.rotation);
+            ctx.scale(1, Math.abs(Math.cos(petal.flip))); // 3D flip effect
             ctx.beginPath();
-            ctx.fillStyle = `rgba(255, 182, 193, ${petal.opacity})`; // Светло-розовый
+
+            // Adding a simple linear gradient for a 3D shading effect
+            let grad = ctx.createLinearGradient(0, -petal.size, 0, petal.size);
+            grad.addColorStop(0, `rgba(255, 204, 213, ${petal.opacity})`);
+            grad.addColorStop(1, `rgba(255, 153, 170, ${petal.opacity})`);
+            ctx.fillStyle = grad;
 
             if (petal.type === 0) { // Простой эллипс
                 ctx.ellipse(0, 0, petal.size, petal.size / 1.8, 0, 0, Math.PI * 2);
@@ -367,6 +387,7 @@
 
                 p.rotation += p.rotationSpeed * (1 + wind.strength * 0.3); // Ветер заставляет их вращаться быстрее
                 p.x += Math.sin(p.y * p.swaySpeed) * p.sway * p.size; // Нежное покачивание из стороны в сторону
+                p.flip += p.flipSpeed * (1 + wind.strength * 0.3); // 3D flip update
 
                 // Взаимодействие с котом (только для не-наземных лепестков)
                 if (cat.state === 'playing_petals' || cat.state === 'hunting' || cat.state === 'pouncing') {
@@ -514,12 +535,15 @@
                 }
 
 
+                let tailGrad = ctx.createLinearGradient(cat.tailSegments[0].x, cat.tailSegments[0].y, cat.tailSegments[cat.tailSegmentCount-1].x, cat.tailSegments[cat.tailSegmentCount-1].y);
+                tailGrad.addColorStop(0, '#E67E22');
+                tailGrad.addColorStop(1, '#D35400');
                 ctx.lineWidth = 13;
-                ctx.strokeStyle = '#707070';
+                ctx.strokeStyle = '#D35400'; // Dark orange edge
                 ctx.lineCap = 'round';
                 ctx.stroke();
                 ctx.lineWidth = 9;
-                ctx.strokeStyle = '#888888';
+                ctx.strokeStyle = tailGrad;
                 ctx.stroke();
             }
 
@@ -529,11 +553,32 @@
             ctx.translate(cat.x, cat.y);
             ctx.rotate(cat.angle);
 
+            // Dynamic shadow for pouncing and idle
+            let shadowScale = 1;
+            let shadowOpacity = 0.08 + wind.strength * 0.01;
+            if (cat.state === 'pouncing') {
+                const windUp = 10;
+                const lunge = 20;
+                let frame = cat.pounce.currentFrame;
+                if (frame > windUp && frame <= windUp + lunge) {
+                    let progress = (frame - windUp) / lunge;
+                    // Shadow shrinks and fades as cat jumps higher
+                    let jumpHeightMod = Math.sin(progress * Math.PI);
+                    shadowScale = 1 - (jumpHeightMod * 0.5);
+                    shadowOpacity *= (1 - jumpHeightMod * 0.6);
+                }
+            }
+
             // Тень
             ctx.beginPath();
-            ctx.ellipse(0, cat.height * 0.48, cat.width * 0.38, cat.height * 0.12, 0, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(0,0,0,${0.08 + wind.strength * 0.01})`;
+            ctx.ellipse(0, cat.height * 0.48, cat.width * 0.38 * shadowScale, cat.height * 0.12 * shadowScale, 0, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0,0,0,${shadowOpacity})`;
             ctx.fill();
+
+            // Breathing animation scale (applied only to body and legs, not shadow)
+            ctx.save();
+            let breatheScale = Math.sin(Date.now() * 0.003); // Softer breathing
+            ctx.scale(1 + breatheScale * 0.015, 1 + breatheScale * 0.015);
 
             // Задние лапы
             let rearPawOffset = 0;
@@ -542,8 +587,11 @@
                  rearPawOffset = Math.sin(cat.idleWalk.stepPhase + Math.PI/2) * 10 * (cat.idleWalk.isRunMode ? 1.5 : 1);
             }
             for (let i = -1; i <= 1; i += 2) {
-                ctx.fillStyle = '#888888';
-                ctx.strokeStyle = '#777777';
+                let legGrad = ctx.createRadialGradient(-cat.width * 0.28 * i, cat.height * 0.15, cat.width * 0.05, -cat.width * 0.28 * i, cat.height * 0.15, cat.width * 0.15);
+                legGrad.addColorStop(0, '#FF9F43');
+                legGrad.addColorStop(1, '#E67E22');
+                ctx.fillStyle = legGrad;
+                ctx.strokeStyle = '#D35400';
                 ctx.lineWidth = 1.5;
                 // Бедро
                 ctx.beginPath();
@@ -556,19 +604,24 @@
                     -cat.width * 0.2 * i - rearPawOffset * i * 0.3, cat.height * 0.35,
                     -cat.width * 0.15 * i - rearPawOffset * i, cat.height * 0.42
                 );
-                ctx.lineWidth = 10; ctx.strokeStyle = '#888888'; ctx.lineCap = 'round'; ctx.stroke();
-                // Лапа (добавлено смещение по Y для анимации подъема/опускания)
+                ctx.lineWidth = 10; ctx.strokeStyle = '#E67E22'; ctx.lineCap = 'round'; ctx.stroke();
+                // Лапа (white socks)
                 ctx.beginPath();
-                ctx.arc(-cat.width * 0.15 * i - rearPawOffset*i, cat.height * 0.42 - Math.abs(rearPawOffset)*0.05, 5,0,Math.PI*2);
-                ctx.fillStyle = '#777777'; ctx.fill();
+                ctx.arc(-cat.width * 0.15 * i - rearPawOffset*i, cat.height * 0.42 - Math.abs(rearPawOffset)*0.05, 6, 0, Math.PI*2);
+                ctx.fillStyle = '#FFFFFF'; ctx.fill();
+                ctx.strokeStyle = '#DDDDDD'; ctx.lineWidth = 1; ctx.stroke();
             }
 
             // Тело
+            let bodyGrad = ctx.createRadialGradient(cat.width * 0.1, -cat.height * 0.1, cat.width * 0.1, 0, 0, cat.width * 0.4);
+            bodyGrad.addColorStop(0, '#FFB770');
+            bodyGrad.addColorStop(0.5, '#FF9F43');
+            bodyGrad.addColorStop(1, '#E67E22');
             ctx.beginPath();
             ctx.ellipse(0, 0, cat.width * 0.4, cat.height * 0.45, 0, 0, Math.PI * 2);
-            ctx.fillStyle = '#888888';
+            ctx.fillStyle = bodyGrad;
             ctx.fill();
-            ctx.strokeStyle = '#777777';
+            ctx.strokeStyle = '#D35400';
             ctx.lineWidth = 2;
             ctx.stroke();
 
@@ -583,7 +636,7 @@
                 // Плечо
                 ctx.beginPath();
                 ctx.ellipse(cat.width * 0.22 * i, cat.height * 0.05, cat.width * 0.1, cat.height*0.15, 0,0,Math.PI*2);
-                ctx.fillStyle = '#888888'; ctx.fill(); ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.fillStyle = '#FF9F43'; ctx.fill(); ctx.strokeStyle = '#D35400'; ctx.lineWidth = 1.5; ctx.stroke();
 
                 // Нижняя часть лапы/сама лапа
                 ctx.beginPath();
@@ -594,31 +647,56 @@
                 else if (cat.batting.isBatting) currentPawExtension = cat.batting.pawExtension;
 
                 let kneeX = cat.width * 0.20 * i + (currentPawExtension * i * 0.3) + pawOffsetWalk * i * 0.5;
-                // Увеличено влияние pawOffsetWalk на Y-координату для более выраженного движения
                 let kneeY = cat.height * 0.30 + (currentPawExtension * 0.05) + Math.abs(pawOffsetWalk) * 0.1;
                 let pawX = cat.width * 0.22 * i + (currentPawExtension * i * 0.9) + pawOffsetWalk * i;
-                // Увеличено влияние pawOffsetWalk на Y-координату для более выраженного движения
                 let pawY = cat.height * 0.42 + (currentPawExtension * 0.2) + Math.abs(pawOffsetWalk) * 0.1;
 
                 ctx.quadraticCurveTo(kneeX, kneeY, pawX, pawY);
                 ctx.lineWidth = 11;
-                ctx.strokeStyle = '#888888';
+                ctx.strokeStyle = '#FF9F43';
                 ctx.lineCap = 'round';
                 ctx.stroke();
-                // Лапа
+
+                // Лапа (white socks)
                 ctx.beginPath();
                 ctx.arc(pawX, pawY, 6, 0, Math.PI * 2);
-                ctx.fillStyle = '#777777';
+                ctx.fillStyle = '#FFFFFF';
                 ctx.fill();
+                ctx.strokeStyle = '#DDDDDD'; ctx.lineWidth = 1; ctx.stroke();
             }
+
+            ctx.restore(); // End breathing scale for body/legs
 
             // Голова
             let headX = cat.width * 0.33;
             let headY = 0;
+            let headGrad = ctx.createRadialGradient(headX, headY - cat.height * 0.1, cat.height * 0.05, headX, headY, cat.height * 0.3);
+            headGrad.addColorStop(0, '#FFC285');
+            headGrad.addColorStop(0.5, '#FF9F43');
+            headGrad.addColorStop(1, '#E67E22');
+
             ctx.beginPath();
             ctx.arc(headX, headY, cat.height * 0.3, 0, Math.PI * 2);
-            ctx.fillStyle = '#888888'; ctx.fill();
-            ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke();
+            ctx.fillStyle = headGrad; ctx.fill();
+            ctx.strokeStyle = '#D35400'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // Forehead M-stripes
+            ctx.beginPath();
+            ctx.moveTo(headX - cat.width * 0.08, headY - cat.height * 0.15);
+            ctx.lineTo(headX - cat.width * 0.04, headY - cat.height * 0.05);
+            ctx.lineTo(headX, headY - cat.height * 0.15);
+            ctx.lineTo(headX + cat.width * 0.04, headY - cat.height * 0.05);
+            ctx.lineTo(headX + cat.width * 0.08, headY - cat.height * 0.15);
+            ctx.strokeStyle = '#D35400';
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // White snout
+            ctx.beginPath();
+            ctx.ellipse(headX + cat.width * 0.06, headY + cat.height * 0.08, cat.width*0.12, cat.height*0.1, 0, 0, Math.PI*2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
 
             // Уши
             for (let i = -1; i <= 1; i += 2) {
@@ -628,8 +706,8 @@
                 ctx.lineTo(headX + cat.height * 0.15 * i, earBaseY - cat.height * 0.12 * i);
                 ctx.lineTo(headX + cat.height * 0.05 * i, earBaseY + cat.height * 0.13 * i);
                 ctx.closePath();
-                ctx.fillStyle = '#888888'; ctx.fill();
-                ctx.strokeStyle = '#777777'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.fillStyle = '#E67E22'; ctx.fill();
+                ctx.strokeStyle = '#D35400'; ctx.lineWidth = 1.5; ctx.stroke();
 
                 // Внутреннее ухо (розовое)
                 ctx.beginPath();
@@ -664,8 +742,9 @@
                     eyeXPos, headY + eyeYOffset * i, currentEyeRadius * 0.1,
                     eyeXPos, headY + eyeYOffset * i, currentEyeRadius
                 );
-                grad.addColorStop(0, '#AECB5B');
-                grad.addColorStop(1, '#4A5D23');
+                grad.addColorStop(0, '#50C878'); // Emerald bright
+                grad.addColorStop(0.6, '#097969'); // Emerald mid
+                grad.addColorStop(1, '#023020'); // Emerald dark
                 ctx.fillStyle = grad;
                 ctx.fill();
 
@@ -717,6 +796,21 @@
             ctx.strokeStyle = '#444';
             ctx.lineWidth = 1;
             ctx.stroke();
+
+            // Whiskers
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 1.5;
+            for(let i = -1; i <= 1; i += 2) {
+                // Top whisker
+                ctx.beginPath(); ctx.moveTo(headX + cat.width*0.1, headY + cat.height*0.05 + i*cat.height*0.02);
+                ctx.quadraticCurveTo(headX + cat.width*0.2, headY - cat.height*0.05 + i*cat.height*0.05, headX + cat.width*0.35, headY - cat.height*0.02 + i*cat.height*0.1); ctx.stroke();
+                // Middle whisker
+                ctx.beginPath(); ctx.moveTo(headX + cat.width*0.12, headY + cat.height*0.08 + i*cat.height*0.01);
+                ctx.quadraticCurveTo(headX + cat.width*0.25, headY + cat.height*0.08 + i*cat.height*0.08, headX + cat.width*0.38, headY + cat.height*0.1 + i*cat.height*0.15); ctx.stroke();
+                // Bottom whisker
+                ctx.beginPath(); ctx.moveTo(headX + cat.width*0.1, headY + cat.height*0.11 + i*cat.height*0.02);
+                ctx.quadraticCurveTo(headX + cat.width*0.2, headY + cat.height*0.15 + i*cat.height*0.1, headX + cat.width*0.3, headY + cat.height*0.25 + i*cat.height*0.12); ctx.stroke();
+            }
 
             ctx.restore();
         }
